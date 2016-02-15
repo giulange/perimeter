@@ -1,0 +1,6 @@
+#!/bin/sh
+#/usr/local/cuda-5.5/bin/nvcc --compile -G -I/usr/include/gdal/ -O0 -g -gencode arch=compute_20,code=compute_20 -gencode arch=compute_20,code=sm_20 -ftz=false --prec-div=true -x cu -ptx -o  "/opt/soil_sealing/cudacodes/fragmentation.ptx" "/home/giuliano/git/cuda/fragmentation/src/fragmentation_4_ss-gci.cu"
+#/usr/local/cuda-5.5/bin/nvcc --compile -G -O0 -g -gencode arch=compute_20,code=compute_20 -gencode arch=compute_20,code=sm_20 -ftz=false --prec-div=true -x cu -ptx -o  "/opt/soil_sealing/cudacodes/fragmentation.ptx" "/home/giuliano/git/cuda/fragmentation/src/fragmentation_4_ss-gci.cu"
+/usr/local/cuda-5.5/bin/nvcc -ptx -o "/opt/soil_sealing/cudacodes/perimeter.ptx" "/home/giuliano/git/cuda/perimeter/src/perimeter_4_ss-gci.cu"
+chmod +x /opt/soil_sealing/cudacodes/perimeter.ptx
+chmod -w /opt/soil_sealing/cudacodes/perimeter.ptx
