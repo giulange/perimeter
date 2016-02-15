@@ -1,0 +1,55 @@
+[9002 x 9152 pixels - with "print_intermediate_arrays"]
+  -1-   gtranspose	    40 [msec]
+  -2-     tidx2_ns	    20 [msec]
+  -3-   gtranspose	    30 [msec]
+  -4-     tidx2_ns	    20 [msec]
+  -5- reduce6_nvidia	    10 [msec]
+______________________________________
+       Total time:	   120 [msec]
+Perimeter = 69183836
+
+
+[9002 x 9152 pixels - without "print_intermediate_arrays"]
+  -1-   gtranspose	    30 [msec]
+  -2-     tidx2_ns	    20 [msec]
+  -3-   gtranspose	    40 [msec]
+  -4-     tidx2_ns	    10 [msec]
+  -5- reduce6_nvidia	     0 [msec]
+______________________________________
+       Total time:	   100 [msec]
+Perimeter = 69183836
+
+
+[9002 x 9152 pixels - mask_len = 40]
+  -1-   gtranspose	    30 [msec]
+  -2-     tidx2_ns	    30 [msec]
+  -3-   gtranspose	    30 [msec]
+  -4-     tidx2_ns	    20 [msec]
+  -5- reduce6_nvidia	    10 [msec]
+______________________________________
+       Total time:	   120 [msec]
+Perimeter = 69183836
+
+[9002 x 9152 pixels - mask_len = 120]
+ -1-   gtranspose	    30 [msec]
+  -2-     tidx2_ns	    20 [msec]
+  -3-   gtranspose	    30 [msec]
+  -4-     tidx2_ns	    30 [msec]
+  -5- reduce6_nvidia	     0 [msec]
+______________________________________
+       Total time:	   110 [msec]
+Perimeter = 69183836
+
+
+[8k x 8k pixels]
+  -1-   gtranspose	    30 [msec]
+  -2-     tidx2_ns	    20 [msec]
+  -3-   gtranspose	    20 [msec]
+  -4-     tidx2_ns	    20 [msec]
+  -5- reduce6_nvidia	    20 [msec]
+______________________________________
+       Total time:	   110 [msec]
+Perimeter = 4156
+
+
+
