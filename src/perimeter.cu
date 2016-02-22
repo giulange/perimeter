@@ -146,7 +146,7 @@ reduce6(const T *g_idata, const unsigned char *ROI, T *g_odata, unsigned int n)
     while (i < n)
     {
         mySum += g_idata[i] * ROI[i];
-        // ensure we don't read out of bounds -- this is optimized away for powerOf2 sized arrays
+        // ensure we don't read out of bounds -- this is optimised away for powerOf2 sized arrays
         if (nIsPow2 || i + blockSize < n) mySum += g_idata[i+blockSize] * ROI[i];
         i += gridSize;
     }
@@ -163,7 +163,7 @@ reduce6(const T *g_idata, const unsigned char *ROI, T *g_odata, unsigned int n)
     {
         // now that we are using warp-synchronous programming (below)
         // we need to declare our shared memory volatile so that the compiler
-        // doesn't reorder stores to it and induce incorrect behavior.
+        // doesn't reorder stores to it and induce incorrect behaviour.
         volatile T *smem = sdata;
 
         if (blockSize >=  64) smem[tid] = mySum = mySum + smem[tid + 32];
@@ -176,6 +176,11 @@ reduce6(const T *g_idata, const unsigned char *ROI, T *g_odata, unsigned int n)
 
     // write result for this block to global mem
     if (tid == 0) g_odata[blockIdx.x] = sdata[0];
+    // if you use atomics you can get the overall sum directly this way:
+    // atomicAdd( &g_odata[0], sdata[0] );
+    // but:
+    // 	- T can't be double,
+    //	- g_odata should be scalar and not array.
 }
 
 
@@ -210,8 +215,8 @@ __global__ void tidx2_ns(	const unsigned char	*IN			,
 							unsigned int		mask_len	){
 
 	/* NOTES:
-	 * The CUDA algorithm manage the object borders at the map border as they
-	 * were countorned by non-object pixels. This mean that a 1-pixel object on
+	 * The CUDA algorithm manage the object borders at the map borders as they
+	 * were surrounded by non-object pixels. This mean that a 1-pixel object on
 	 * the map border has perimeter 4 and not 3. This should be the same
 	 * approach used by the MatLab "bwperim" built-in function.
 	 * This choice was taken to solve the current trouble, where the *1 must be
@@ -241,8 +246,9 @@ __global__ void tidx2_ns(	const unsigned char	*IN			,
 	 * 	(1) East–West dir 	(after transpose "|" ––> "––")
 	 * 	(2) North–South dir (after transpose "––" ––> "|")
 	 * THIS kernel performs the algebraic sum of three rows:
-	 *   > the row at top 	 of current pixel  +[ tid+(ii-1)+map_width ]
-	 *   > the row at bottom of current pixel  -[ tid+(ii+1)+map_width ]
+	 *   > the pixel at top 	of current pixel  ::  +  IN[ tid+(ii-1)+map_width ]
+	 *   > the pixel at bottom 	of current pixel  ::  -  IN[ tid+(ii+1)+map_width ]
+	 *   > the current pixel					  ::  +2*IN[ tid+(ii+0)*map_width ]
 	 *
 	 *  Particular cases are figured out according to blockIdx.x position.
 	 *  See later comments!
@@ -351,16 +357,20 @@ int main( int argc, char **argv ) {
 	// **dev
 	unsigned char			*dev_BIN, *dev_ROI;
 	double 					*dev_PERI,*dev_TMP;
+	double 					*h_Perimeter, *d_Perimeter;// it's size is equal to the number of blocks within grid!
+
 	// initialize grids on CPU MEM:
 	CUDA_CHECK_RETURN( cudaMallocHost( 	(void**)&host_PERI, 	sizeDouble) );
 	CUDA_CHECK_RETURN( cudaMallocHost( 	(void**)&h_print_double,sizeDouble) );
 	CUDA_CHECK_RETURN( cudaMallocHost( 	(void**)&h_print_uchar,	sizeChar) 	);
+	CUDA_CHECK_RETURN( cudaMallocHost( 	(void **)&h_Perimeter,	blocks*sizeof( double )) );
 	// initialize grids on GPU MEM:
 	CUDA_CHECK_RETURN( cudaMalloc(		(void **)&dev_BIN, 		sizeChar) 	);
 	CUDA_CHECK_RETURN( cudaMalloc(		(void **)&dev_ROI,  	sizeChar) 	);
 	CUDA_CHECK_RETURN( cudaMalloc(		(void **)&dev_TMP, 		sizeDouble) );
 	CUDA_CHECK_RETURN( cudaMalloc(		(void **)&dev_PERI,  	sizeDouble) );
 	CUDA_CHECK_RETURN( cudaMemset(		dev_TMP, 0,  			sizeDouble) );// check if this works on Jcuda/Java (I remember some troubles)
+	CUDA_CHECK_RETURN( cudaMalloc(		(void **)&d_Perimeter,  blocks*sizeof( double )) );
 	/*
 	 * 	BIN
 	 */
@@ -387,7 +397,6 @@ int main( int argc, char **argv ) {
 	dim3 block_trans( sqrt_nmax_threads, sqrt_nmax_threads, 1);// ––> block geometry is always the same
 	dim3 grid_trans ( gdx_trans, gdy_trans );				   // ––> grid geometry for "go" 	transpose
 	dim3 grid_trans2( gdy_trans, gdx_trans );				   // ––> grid geometry for "back"	transpose
-
 	// k(2*TID - NS)
 	gdx_kTidx2NS 	= ((unsigned int)(MDbin.width % (sqrt_nmax_threads*sqrt_nmax_threads))>0) + (MDbin.width  / (sqrt_nmax_threads*sqrt_nmax_threads));
 	gdy_kTidx2NS 	= (unsigned int)((MDbin.heigth % mask_len)>0) + floor(MDbin.heigth / mask_len);
@@ -397,6 +406,10 @@ int main( int argc, char **argv ) {
 	gdy_kTidx2NS_t 	= (unsigned int)((MDbin.width % mask_len)>0) + floor(MDbin.width / mask_len);
 	dim3 block_kTidx2NS_t( sqrt_nmax_threads*sqrt_nmax_threads,1,1);
 	dim3 grid_kTidx2NS_t ( gdx_kTidx2NS_t,gdy_kTidx2NS_t,1);
+	// reduce6
+	dim3 dimBlock( threads, 1, 1 );
+	dim3 dimGrid(  blocks,  1, 1 );
+	int smemSize = (threads <= 32) ? 2 * threads * sizeof(double) : threads * sizeof(double);
 
 	/*		KERNELS INVOCATION
 	 *
@@ -474,16 +487,6 @@ int main( int argc, char **argv ) {
 	geotiffread( FIL_ROI, MDroi, &ROI[0] );
 	// H2D:
 	CUDA_CHECK_RETURN( cudaMemcpy(dev_ROI, ROI, 	sizeChar, cudaMemcpyHostToDevice) );
-	//–––––– tmp
-	dim3 dimBlock(threads, 1, 1);
-	dim3 dimGrid(  blocks, 1, 1);
-	double *h_Perimeter, *d_Perimeter;// it's size is equal to the number of blocks within grid!
-	CUDA_CHECK_RETURN( cudaMalloc(		(void **)&d_Perimeter,  blocks*sizeof( double )) );
-	CUDA_CHECK_RETURN( cudaMallocHost( 	(void **)&h_Perimeter,	blocks*sizeof( double )) );
-	//CUDA_CHECK_RETURN( cudaMemset(dev_PERI, 1,  			sizeDouble) );
-	start_t = clock();
-	int smemSize = (threads <= 32) ? 2 * threads * sizeof(double) : threads * sizeof(double);
-	//–––––– tmp
 	start_t = clock();
 	if (isPow2(map_len)){ reduce6<double, 512, true> <<< dimGrid, dimBlock, smemSize >>>(dev_PERI, dev_ROI, d_Perimeter, map_len);
 	}else{	 			  reduce6<double, 512, false><<< dimGrid, dimBlock, smemSize >>>(dev_PERI, dev_ROI, d_Perimeter, map_len);}
@@ -505,6 +508,7 @@ int main( int argc, char **argv ) {
 	int sumPerimeter = 0;
 	CUDA_CHECK_RETURN( cudaMemcpy(h_Perimeter,d_Perimeter,	(size_t)blocks*sizeof( double ),cudaMemcpyDeviceToHost) );
 	for(unsigned int ii=0;ii<blocks;ii++){ sumPerimeter += h_Perimeter[ii]; }
+	//sumPerimeter = h_Perimeter[0];
 	printf("Perimeter = %d\n\n",sumPerimeter);
 
 	// save the map with pixel-by-pixel computed perimeter (for checking purpose, within MatLab)

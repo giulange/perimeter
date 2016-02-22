@@ -63,12 +63,12 @@ TOT_bytes_cuda_perimeter = (numel(BIN) * Char_1x)*2 + (numel(BIN) * Double_x1)*2
 % TOT_bytes_cuda_perimeter = (64*10^6 * Char_1x)*2 + (64*10^6 * Double_x1)*2
 
 fprintf('Size required on GPU:%10.3f MB\n',TOT_bytes_cuda_perimeter/1024^2)
-%% matlab reduce
+%% matlab perimeter
 tic
 mlPERI = bwperim(BIN, 4);
 % mlPERI = sum(peri_BIN(:));
 myTOC = toc;
-%% cuda PERIMETER
+%% load cuda PERIMETER
 cuPERI = geotiffread( FIL_PERI );
 %% check for differences
 borders(1) = sum(mlPERI(:));
